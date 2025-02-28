@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "npx tsc",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "npm run build && dotenv -e .env node dist/server.js"
   },
   "repository": {
     "type": "git",
@@ -20,10 +23,14 @@
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/pg": "^8.11.11",
+    "dotenv-cli": "^8.0.0",
     "typescript": "^5.7.3"
   },
   "dependencies": {
+    "cli-table3": "^0.6.5",
     "dotenv": "^16.4.7",
-    "inquirer": "^12.4.2"
+    "express": "^4.21.2",
+    "inquirer": "^12.4.2",
+    "pg": "^8.13.3"
   }
 }
