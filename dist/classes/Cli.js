@@ -162,6 +162,117 @@ class Cli {
             });
         });
     }
+    async viewEmployeesByManager() {
+        try {
+            const managersResult = await pool.query(`
+                SELECT DISTINCT m.id, m.first_name, m.last_name
+                FROM employees e
+                JOIN employees m ON e.manager_id = m.id
+            `);
+            const managers = managersResult.rows;
+            if (managers.length === 0) {
+                console.log('No managers found.');
+                this.return();
+                return;
+            }
+            const managerOptions = managers.map(manager => `${manager.first_name} ${manager.last_name}`);
+            const answers = await inquirer.prompt([
+                {
+                    type: 'list',
+                    name: 'Manager',
+                    message: 'Select a manager to view their employees:',
+                    choices: managerOptions
+                }
+            ]);
+            const selectedManager = answers.Manager;
+            const [managerFirstName, managerLastName] = selectedManager.split(' ');
+            const result = await pool.query(`
+                SELECT e.id, e.first_name, e.last_name, r.title, d.department_name, r.salary,
+                CONCAT(m.first_name, ' ', m.last_name) AS manager,
+                mr.title AS manager_title, mr.salary AS manager_salary, md.department_name AS manager_department
+                FROM employees e
+                JOIN roles r ON e.role_id = r.id
+                JOIN departments d ON r.department = d.id
+                LEFT JOIN employees m ON e.manager_id = m.id
+                LEFT JOIN roles mr ON m.role_id = mr.id
+                LEFT JOIN departments md ON mr.department = md.id
+                WHERE m.first_name = $1 AND m.last_name = $2
+            `, [managerFirstName, managerLastName]);
+            if (result.rows.length === 0) {
+                console.log(`No employees found for manager ${selectedManager}.`);
+                this.return();
+                return;
+            }
+            let table = new Table({ head: ["ID", "First Name", "Last Name", "Title", "Department", "Salary", "Manager", "Manager Title", "Manager Salary", "Manager Department"] });
+            result.rows.forEach((row) => {
+                table.push([`${row.id}`, `${row.first_name}`, `${row.last_name}`, `${row.title}`, `${row.department_name}`, `${row.salary}`, `${row.manager}`, `${row.manager_title}`, `${row.manager_salary}`, `${row.manager_department}`]);
+            });
+            console.log(table.toString());
+            this.return();
+        }
+        catch (err) {
+            console.error('Error fetching employees by manager:', err);
+            this.return();
+        }
+    }
+    async viewEmployeesByDepartment() {
+        const result = await pool.query(`SELECT id, department_name FROM departments`);
+        const departments = result.rows;
+        const departmentOptions = departments.map(department => department.department_name);
+        inquirer.prompt([
+            {
+                type: 'list',
+                name: 'Department',
+                message: 'Choose a department to see their employees',
+                choices: departmentOptions
+            }
+        ])
+            .then(async (answers) => {
+            pool.query(`
+                SELECT e.id, e.first_name, e.last_name, r.title, d.department_name, r.salary
+                FROM employees e
+                JOIN roles r ON e.role_id = r.id
+                JOIN departments d ON r.department = d.id
+                LEFT JOIN employees m ON e.manager_id = m.id
+                LEFT JOIN roles mr ON m.role_id = mr.id
+                LEFT JOIN departments md ON mr.department = md.id
+                WHERE d.department_name = $1
+                `, [answers.Department], (err, result) => {
+                let table = new Table({ head: ["ID", "First Name", "Last Name", "Title", "Department", "Salary", "Manager"] });
+                result.rows.forEach((row) => {
+                    table.push([`${row.id}`, `${row.first_name}`, `${row.last_name}`, `${row.title}`, `${row.department_name}`, `${row.salary}`]);
+                });
+                console.log(table.toString());
+                this.return();
+            });
+        });
+    }
+    async deleteEmployee() {
+        const result = await pool.query(`SELECT e.id, CONCAT(e.first_name, ' ', e.last_name) as name FROM employees e`);
+        const employees = result.rows;
+        const employeeOptions = employees.map(employee => employee.name);
+        inquirer.prompt([
+            {
+                type: 'list',
+                name: 'Employee',
+                message: 'Choose an employee to delete',
+                choices: employeeOptions
+            }
+        ])
+            .then(async (answers) => {
+            const answerRow = employees.find((employee) => employee.name === answers.Employee);
+            pool.query(`DELETE FROM employees WHERE id = $1`, [answerRow.id], (err, result) => {
+                if (err) {
+                    console.log(err);
+                    this.mainMenu();
+                }
+                else if (result) {
+                    console.log(`${answers.Employee} has been deleted from the database.`);
+                    this.mainMenu();
+                }
+            });
+        });
+    }
     viewAllRoles() {
         pool.query(`SELECT roles.id, roles.title, departments.department_name, roles.salary 
                     FROM roles 
@@ -230,6 +341,32 @@ class Cli {
             });
         });
     }
+    async deleteRole() {
+        const result = await pool.query(`SELECT roles.id, roles.title FROM roles`);
+        const roles = result.rows;
+        const roleOptions = roles.map(role => role.title);
+        inquirer.prompt([
+            {
+                type: 'list',
+                name: 'Role',
+                message: 'Choose a role to delete',
+                choices: roleOptions
+            }
+        ])
+            .then(async (answers) => {
+            const answerRow = roles.find((role) => role.title === answers.Role);
+            pool.query(`DELETE FROM roles WHERE id = $1`, [answerRow.id], (err, result) => {
+                if (err) {
+                    console.log(err);
+                    this.mainMenu();
+                }
+                else if (result) {
+                    console.log(`${answers.Role} has been deleted from the database.`);
+                    this.mainMenu();
+                }
+            });
+        });
+    }
     viewAllDepartments() {
         pool.query('TABLE departments', (err, result) => {
             if (err) {
@@ -269,6 +406,64 @@ class Cli {
             });
         });
     }
+    async deleteDepartment() {
+        const result = await pool.query(`SELECT id, department_name FROM departments`);
+        const departments = result.rows;
+        const departmentOptions = departments.map(department => department.department_name);
+        inquirer.prompt([
+            {
+                type: 'list',
+                name: 'Department',
+                message: 'Choose a department to delete',
+                choices: departmentOptions
+            }
+        ])
+            .then(async (answers) => {
+            const answerRow = departments.find((department) => department.department_name === answers.Department);
+            console.log(answerRow.id);
+            pool.query(`DELETE FROM departments WHERE id = $1`, [answerRow.id], (err, result) => {
+                if (err) {
+                    console.log(err);
+                    this.mainMenu();
+                }
+                else if (result) {
+                    console.log(`${answers.Department} has been deleted from the database.`);
+                    this.mainMenu();
+                }
+            });
+        });
+    }
+    async totalUtilizedBudget() {
+        const result = await pool.query(`SELECT id, department_name FROM departments`);
+        const departments = result.rows;
+        const departmentOptions = departments.map(department => department.department_name);
+        inquirer.prompt([
+            {
+                type: 'list',
+                name: 'Department',
+                message: 'Choose a department to see their employees',
+                choices: departmentOptions
+            }
+        ])
+            .then(async (answers) => {
+            pool.query(`
+                SELECT SUM(r.salary) as sum_salary, d.department_name FROM employees e JOIN roles r ON e.role_id = r.id
+                JOIN departments d ON r.department = d.id WHERE d.department_name = $1 GROUP BY department_name 
+                `, [answers.Department], (err, result) => {
+                if (err) {
+                    console.log(err);
+                }
+                else if (result) {
+                    let table = new Table({ head: [`Sum budget of ${answers.Department}`] });
+                    result.rows.forEach((row) => {
+                        table.push([`$${row.sum_salary}`]);
+                    });
+                    console.log(table.toString());
+                    this.return();
+                }
+            });
+        });
+    }
     return() {
         inquirer
             .prompt([
@@ -294,8 +489,10 @@ class Cli {
                 type: 'list',
                 name: 'SelectAction',
                 message: 'What would you like to do?',
-                choices: ['View All Employees', 'Add Employee', 'Update Employee Role', 'View All Roles',
-                    'Add Role', 'View All Departments', 'Add Department', 'Quit'],
+                choices: ['View All Employees', 'Add Employee', 'Update Employee Role', 'View Employees By Manager',
+                    'View Employees By Department',
+                    'Delete Employee', 'View All Roles',
+                    'Add Role', 'Delete Role', 'View All Departments', 'Add Department', 'Delete Department', 'Total Utilized Budget of Department', 'Quit'],
             },
         ])
             .then((answers) => {
@@ -308,17 +505,35 @@ class Cli {
             else if (answers.SelectAction === 'Update Employee Role') {
                 this.updateEmployeeRole();
             }
+            else if (answers.SelectAction === 'View Employees By Manager') {
+                this.viewEmployeesByManager();
+            }
+            else if (answers.SelectAction === 'View Employees By Department') {
+                this.viewEmployeesByDepartment();
+            }
+            else if (answers.SelectAction === 'Delete Employee') {
+                this.deleteEmployee();
+            }
             else if (answers.SelectAction === 'View All Roles') {
                 this.viewAllRoles();
             }
             else if (answers.SelectAction === 'Add Role') {
                 this.addRole();
             }
+            else if (answers.SelectAction === 'Delete Role') {
+                this.deleteRole();
+            }
             else if (answers.SelectAction === 'View All Departments') {
                 this.viewAllDepartments();
             }
             else if (answers.SelectAction === 'Add Department') {
                 this.addDepartment();
+            }
+            else if (answers.SelectAction === 'Delete Department') {
+                this.deleteDepartment();
+            }
+            else if (answers.SelectAction === 'Total Utilized Budget of Department') {
+                this.totalUtilizedBudget();
             }
             else if (answers.SelectAction === 'Quit') {
                 process.exit();
