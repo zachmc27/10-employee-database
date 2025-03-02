@@ -47,7 +47,7 @@
 
   ![vscode dashboard](./images/openintgratedterminal.png) 
   *via VSCode*
-  
+
 2. Run the code ` npm start ` in the terminal
 
   
@@ -93,10 +93,11 @@
 
    
   ## Questions
-   
+   y
   For any questions or assistance, please reach out through these mediums:
    
   - **Github:** [zachmc27](https://github.com/zachmc27)
   - **Email:** <dzdudes1213@gmail.com>
 
+>note *I got a lot of help from AI for the viewEmployeesByManager function*
   
